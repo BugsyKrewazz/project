@@ -2,7 +2,6 @@ script_name("Project")
 script_author("Kronis")
 script_version("0.5")
 
-
 local imgui = require 'imgui'
 local imgui_lib = require 'imgui'
 local encoding = require 'encoding'
@@ -29,7 +28,7 @@ local HLcfg = inicfg.load({
 		abike = false,
 		antir = false,
 		usd = false,
-		acon = false
+		autorec = false,
 	}
 }, 'PGsettings.ini')
 local teston = imgui.ImBool(HLcfg.config.teston)
@@ -48,7 +47,7 @@ local autcarrp = imgui.ImBool(HLcfg.config.autcarrp)
 local abike = imgui.ImBool(HLcfg.config.abike)
 local antir = imgui.ImBool(HLcfg.config.antir)
 local usd = imgui.ImBool(HLcfg.config.usd)
-local acon = imgui.ImBool(HLcfg.config.acon)
+local autorec = imgui.ImBool(HLcfg.config.autorec)
 
 local themes = {
     colorThemes = {"peleks"},
@@ -130,13 +129,13 @@ local hook = require 'lib.samp.events'
 local vkeys = require 'vkeys'
 local key = require 'vkeys'
 local ev = require('lib.samp.events')
+local events = require"lib.samp.events"
 
 local whon = 0
 local hpon = 0
 local bfish = 0
 local afish = 0
 local aruda = 0
-local captureon = 0
 
 local onlsg = 0
 local ongsg = 0
@@ -150,19 +149,6 @@ local onsyy = 0
 local onlm = 0
 local onriwezza = 0
 local onrm = 0
-
-local ffi = require "ffi"
-ffi.cdef[[
-     void keybd_event(int keycode, int scancode, int flags, int extra);
-]]
-
-function EmulateKey(key, isDown)
-    if not isDown then
-        ffi.C.keybd_event(key, 0, 2, 0)
-    else
-        ffi.C.keybd_event(key, 0, 0, 0)
-    end
-end
 
 
 function imgui.OnDrawFrame()
@@ -226,12 +212,6 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 		imgui.TextQuestion(u8'Automatiski izmantos narkotikas pec ka pateiks kad vari izmantot atkal tas 	[X lai izmantotu]')
-		if imgui.Checkbox(u8'AutoCapture | Test', acon) then
-			HLcfg.config.acon = acon.v
-			save()
-		end
-		imgui.SameLine(nil, 5)
-		imgui.TextQuestion(u8"Iespamos automatiski terru")
 		imgui.Text("/whlock = warehouselock")
 		imgui.Text("/whunlock = warehouseunlock")
 		imgui.EndChild()
@@ -283,6 +263,11 @@ function imgui.OnDrawFrame()
 		imgui.SameLine()
 		imgui.BeginChild("Child3", imgui.ImVec2(200, 350), true)
 		imgui.Text('Cheats')
+		if imgui.Button('Spawn(/spawn)') then
+			spawner()
+		end
+		imgui.SameLine(nil, 5)
+		imgui.TextQuestion(u8'Spawnos tevi hooda/maja')
 		if imgui.Button('Suicide(/sc)') then
 			suicide()
 		end
@@ -353,11 +338,6 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 		imgui.TextQuestion(u8'Auto fishos boata. Tev jabut ir tiesi checkpointa!')
-		if imgui.Button('Spawn(/spawn)') then
-			spawner()
-		end
-		imgui.SameLine(nil, 5)
-		imgui.TextQuestion(u8'Spawnos tevi hooda/maja')
 		if imgui.Button('Reconnect') then
 			recon()
 		end
@@ -498,22 +478,6 @@ end
 		else
 		    setPlayerNeverGetsTired(playerHandle, false)
 			end
-			if acon.v then
-            for td_id = 0, 3000 do
-                if sampTextdrawIsExists(td_id) then 
-                    local td_text = sampTextdrawGetString(td_id)
-                    if td_text == "[F] Tava organizacija atkal var karot" then
-					    if captureon == 1 then
-							lua_thread.create(function()
-							wait(9000)
-							sampAddChatMessage("Cipa ja", -1)
-							wait(0)
-							end)
-						end	
-					end	
-                end
-            end
-        end
 		if gangcheck.v then
 		sampTextdrawCreate(301, "0", 5.0, 300)
 		sampTextdrawCreate(302, "0", 5.0, 313)
@@ -696,11 +660,6 @@ function save()
 end
 
 function event.onServerMessage(color,text)
-	if acon.v then
-	    if text:find("saka") then
-		    captureon = 0
-		end	
-	end 
 	if teston.v then
 		if text:find("PAYDAY") or text:find("LAIKS 20:00") then
 			sampSendChat("/mafbizz")
@@ -1067,4 +1026,38 @@ end
 
 function suicide()
     setCharHealth(PLAYER_PED, 0)
-end	
+end
+
+function update()
+  local fpath = os.getenv('TEMP') .. '\\testoviy_version.json' -- куда будет качаться наш файлик для сравнения версии
+  downloadUrlToFile('https://github.com/BugsyKrewazz/project/blob/e8456e89fdaa0a35c41f61317289bbe9774936c5/autoupdate, fpath, function(id, status, p1, p2) -- ссылку на ваш гитхаб где есть строчки которые я ввёл в теме или любой другой сайт
+    if status == dlstatus.STATUS_ENDDOWNLOADDATA then
+    local f = io.open(fpath, 'r') -- открывает файл
+    if f then
+      local info = decodeJson(f:read('*a')) -- читает
+      updatelink = info.updateurl
+      if info and info.latest then
+        version = tonumber(info.latest) -- переводит версию в число
+        if version > tonumber(thisScript().version) then -- если версия больше чем версия установленная то...
+          lua_thread.create(goupdate) -- апдейт
+        else -- если меньше, то
+          update = false -- не даём обновиться
+          sampAddChatMessage(('[Testing]: Jums jau ir jaunaka versija! Atjauninasana atcelta'), -1)
+        end
+      end
+    end
+  end
+end)
+end
+--скачивание актуальной версии
+function goupdate()
+sampAddChatMessage(('[Testing]: Atrasts atjauninajums. Automātiskā ielāde. Notiek atjaunināšana...'), -1)
+sampAddChatMessage(('[Testing]: Pasreizeja versija: '..thisScript().version..". Jauna: "..version), -1)
+wait(300)
+downloadUrlToFile(updatelink, thisScript().path, function(id3, status1, p13, p23) -- качает ваш файлик с latest version
+  if status1 == dlstatus.STATUS_ENDDOWNLOADDATA then
+  sampAddChatMessage(('[Testing]: Atjauninasana pabeigta!'), -1)
+  thisScript():reload()
+end
+end)
+end
