@@ -181,6 +181,9 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 	    imgui.TextQuestion(u8'Automatiski noerpos apgerba uzvilksanu')
+	    	if imgui.Button("Press ME") then
+			sampAddChatMessage("pimpis", -1)
+		end
 		if imgui.Button("Capture Flooder") then
 			toggleCaptFlooder()
 		end
