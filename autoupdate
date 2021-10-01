@@ -1,5 +1,7 @@
-{script_name("Project")
+script_name("Project")
 script_author("Kronis")
+script_version("0.5")
+
 
 local imgui = require 'imgui'
 local imgui_lib = require 'imgui'
