@@ -1,5 +1,6 @@
 script_name("Project")
 script_author("Kronis")
+script_version("0.6")
 
 local imgui = require 'imgui'
 local imgui_lib = require 'imgui'
@@ -181,9 +182,6 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 	    imgui.TextQuestion(u8'Automatiski noerpos apgerba uzvilksanu')
-	    	if imgui.Button("Press ME") then
-			sampAddChatMessage("pimpis", -1)
-		end
 		if imgui.Button("Capture Flooder") then
 			toggleCaptFlooder()
 		end
@@ -1035,7 +1033,7 @@ end
 
 function update()
   local fpath = os.getenv('TEMP') .. '\\testoviy_version.json'
-  downloadUrlToFile('https://github.com/BugsyKrewazz/project/blob/e8456e89fdaa0a35c41f61317289bbe9774936c5/autoupdate, fpath, function(id, status, p1, p2)
+  downloadUrlToFile('https://github.com/BugsyKrewazz/project/blob/e8456e89fdaa0a35c41f61317289bbe9774936c5/autoupdate', fpath, function(id, status, p1, p2)
     if status == dlstatus.STATUS_ENDDOWNLOADDATA then
     local f = io.open(fpath, 'r')
     if f then
@@ -1053,6 +1051,7 @@ function update()
     end
   end
 end)
+end
 
 function goupdate()
 sampAddChatMessage(('[Testing]: Atrasts atjauninajums. Automātiskā ielāde. Notiek atjaunināšana...'), color)
