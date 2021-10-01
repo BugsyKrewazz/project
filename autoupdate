@@ -214,6 +214,9 @@ function imgui.OnDrawFrame()
 		imgui.TextQuestion(u8'Automatiski izmantos narkotikas pec ka pateiks kad vari izmantot atkal tas 	[X lai izmantotu]')
 		imgui.Text("/whlock = warehouselock")
 		imgui.Text("/whunlock = warehouseunlock")
+		if imgui.Button("Press ME!") then
+		sampAddChatMessage("Gejsesi?", -1)
+		end
 		imgui.EndChild()
 		imgui.SameLine()
 		imgui.BeginChild("Child2", imgui.ImVec2(200, 350), true)
