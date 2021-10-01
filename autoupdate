@@ -196,6 +196,9 @@ function imgui.OnDrawFrame()
 		sampAddChatMessage("{40e0d0}[Bandam] {ffffff}/dg - Deagle, /mg - M4, /ri - County rifle", -1)
 		sampAddChatMessage("{40e0d0}[Mafijam] {ffffff}/md - Deagle, /m4m - M4, /rim - County rifle", -1)
 		end
+		if imgui.Button("Pisies") then
+			sampAddChatMessage("gejs esi ? ", -1)
+		end
 		if imgui.Checkbox(u8'Capture Respamer', ar) then
 			HLcfg.config.ar = ar.v
 			save()
