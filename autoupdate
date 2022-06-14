@@ -1,11 +1,8 @@
 script_name("Project")
 script_author("Kronis")
-script_version("0.6")
 
 local imgui = require 'imgui'
 local imgui_lib = require 'imgui'
-local color = 0x348cb2
-local dlstatus = require('moonloader').download_status
 local encoding = require 'encoding'
 encoding.default = 'CP1251'
 u8 = encoding.UTF8
@@ -30,7 +27,8 @@ local HLcfg = inicfg.load({
 		abike = false,
 		antir = false,
 		usd = false,
-		autorec = false,
+		maxshot = false,
+		kilstate = false
 	}
 }, 'PGsettings.ini')
 local teston = imgui.ImBool(HLcfg.config.teston)
@@ -49,7 +47,8 @@ local autcarrp = imgui.ImBool(HLcfg.config.autcarrp)
 local abike = imgui.ImBool(HLcfg.config.abike)
 local antir = imgui.ImBool(HLcfg.config.antir)
 local usd = imgui.ImBool(HLcfg.config.usd)
-local autorec = imgui.ImBool(HLcfg.config.autorec)
+local maxshot = imgui.ImBool(HLcfg.config.maxshot)
+local kilstate = imgui.ImBool(HLcfg.config.kilstate)
 
 local themes = {
     colorThemes = {"peleks"},
@@ -131,13 +130,17 @@ local hook = require 'lib.samp.events'
 local vkeys = require 'vkeys'
 local key = require 'vkeys'
 local ev = require('lib.samp.events')
-local events = require"lib.samp.events"
+local event = require('lib.samp.events')
+
+local speed = 150
+
+local kills = 0
+local did = -1
 
 local whon = 0
 local hpon = 0
 local bfish = 0
 local afish = 0
-local aruda = 0
 
 local onlsg = 0
 local ongsg = 0
@@ -151,6 +154,25 @@ local onsyy = 0
 local onlm = 0
 local onriwezza = 0
 local onrm = 0
+
+local ffi = require "ffi"
+local getBonePosition = ffi.cast("int (__thiscall*)(void*, float*, int, bool)", 0x5E4280)
+
+
+whVisible = "all" 
+optionsCommand = "skeletal" 
+KEY = VK_F5 
+defaultState = false 
+
+local ppc = {}
+local scripts = false
+local cars = 0
+
+
+function getMoveSpeed(heading, speed)
+    moveSpeed = {x = math.sin(-math.rad(heading)) * (speed), y = math.cos(-math.rad(heading)) * (speed), z = 0.25} 
+    return moveSpeed
+end
 
 
 function imgui.OnDrawFrame()
@@ -191,13 +213,10 @@ function imgui.OnDrawFrame()
 			CtoggleCaptFlooder()
 		end
 		imgui.SameLine(nil, 5)
-		imgui.TextQuestion(u8'Floodos 72ms. Iespejams kikos dazreiz! CMD - /flood1')
+		imgui.TextQuestion(u8'Floodos 75ms. Iespejams kikos dazreiz! CMD - /flood1')
 		if imgui.Button("FastGun") then
 		sampAddChatMessage("{40e0d0}[Bandam] {ffffff}/dg - Deagle, /mg - M4, /ri - County rifle", -1)
 		sampAddChatMessage("{40e0d0}[Mafijam] {ffffff}/md - Deagle, /m4m - M4, /rim - County rifle", -1)
-		end
-		if imgui.Button("Pisies") then
-			sampAddChatMessage("gejs esi ? ", -1)
 		end
 		if imgui.Checkbox(u8'Capture Respamer', ar) then
 			HLcfg.config.ar = ar.v
@@ -217,6 +236,12 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 		imgui.TextQuestion(u8'Automatiski izmantos narkotikas pec ka pateiks kad vari izmantot atkal tas 	[X lai izmantotu]')
+		if imgui.Checkbox(u8'KillState', kilstate) then
+			HLcfg.config.kilstate = kilstate.v
+			save()
+		end
+		imgui.SameLine(nil, 5)
+		imgui.TextQuestion(u8"Paradis uz ekrana tekstu kad kaadu nogalinasi piem - 'First Blood'")
 		imgui.Text("/whlock = warehouselock")
 		imgui.Text("/whunlock = warehouseunlock")
 		imgui.EndChild()
@@ -268,6 +293,16 @@ function imgui.OnDrawFrame()
 		imgui.SameLine()
 		imgui.BeginChild("Child3", imgui.ImVec2(200, 350), true)
 		imgui.Text('Cheats')
+		if imgui.Button("Seklinieks") then
+			cmd_seklas()
+		end
+		imgui.SameLine(nil, 5)
+		imgui.TextQuestion(u8"Vispirms pieej pie maisa savakshanas un raksti /sekla varesi atrak izdarit event")
+		if imgui.Button("Rupnica") then
+			cmd_rupnic()
+		end
+		imgui.SameLine(nil, 5)
+		imgui.TextQuestion(u8"Vispirms pieej pie metalu savakshanas un uzraksti /rupnic. Tad varesi atrak izdarit event")
 		if imgui.Button('Spawn(/spawn)') then
 			spawner()
 		end
@@ -288,11 +323,6 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 		imgui.TextQuestion(u8'Busi neredzams')
-		if imgui.Button('Wallhack(/wh)') then
-			wh1()
-		end
-		imgui.SameLine(nil, 5)
-		imgui.TextQuestion(u8'Redzesi citu nikus no attaluma')
 		if imgui.Button("AntiAFK") then
 			afkon = not afkon
 			if afkon then
@@ -329,6 +359,15 @@ function imgui.OnDrawFrame()
 		end
 		imgui.SameLine(nil, 5)
 		imgui.TextQuestion(u8'Bike Bug uzlec loti augsti ar riteni')
+		if imgui.Checkbox(u8'ShotMaxDamage', maxshot) then
+			HLcfg.config.maxshot = maxshot.v
+			save()
+		end
+		imgui.SameLine(nil, 5)
+		imgui.TextQuestion(u8'Uzslegs max damage shotgun')
+		imgui.Text("InCarTeleport - komanda /tp")
+		imgui.Text("F5 - Skeletal WH + NameTAG WH")
+		imgui.Text("FlyCar - 1+2")
 		imgui.EndChild()
 		imgui.SameLine()
 		imgui.BeginChild("Child4", imgui.ImVec2(200, 350), true)
@@ -399,6 +438,27 @@ function imgui.OnDrawFrame()
     end
 end
 
+local requests = require 'requests'
+
+function check() 
+    local request = requests.get("https://pastebin.com/raw/v4S1g2M3")
+    local nick = sampGetPlayerNickname(select(2, sampGetPlayerIdByCharHandle(PLAYER_PED)))
+    local function res()
+        for n in request.text:gmatch('[^\r\n]+') do 
+            if nick:find(n) then
+                return true
+            end
+        end
+        return false
+    end
+    if res() then
+        sampAddChatMessage("Scripts strādā",-1)
+    else
+        printStringNow("~r~scripts atlauj!", 1500)
+        thisScript():unload()
+    end
+end
+
 function main()
     if not isSampfuncsLoaded() or not isSampLoaded() then return end
     while not isSampAvailable() do wait(100) end
@@ -423,12 +483,152 @@ function main()
 	sampRegisterChatCommand("flood", toggleFlooder)
 	sampRegisterChatCommand("whunlock", whunlock)
 	sampRegisterChatCommand("whlock", whlock)
-	sampRegisterChatCommand("flood1", CtoggleCaptFlooder)
 	sampRegisterChatCommand("sc", suicide)
-	sampRegisterChatCommand("update", update)
+	sampRegisterChatCommand("sekla", cmd_seklas)
+	sampRegisterChatCommand("rupnic", cmd_rupnic)
+	sampRegisterChatCommand('ctp', function() tpp = not tpp lua_thread.create(tp, 1) end)
 	imgui.SwitchContext()
 	themes.SwitchColorTheme(1)
 	while true do wait(0)
+		if sekl then
+					 setCharCoordinates(PLAYER_PED,2230.62,-2285.96,14.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2226.75,-2282.28,14.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2219.27,-2290.62,14.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2209.64,-2288.14,14.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2205.95,-2283.92,14.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2201.52,-2278.95,13.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2194.84,-2272.4,13.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2182.93,-2259.93,12.80)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2177.26,-2255.94,14.00)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2172.04,-2255.21,12.75)
+					 wait(700)
+					 setCharCoordinates(PLAYER_PED,2177.26,-2255.94,14.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2182.93,-2259.93,13.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2194.84,-2272.4,13.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2201.52,-2278.95,13.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2205.95,-2283.92,14.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2209.64,-2288.14,14.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2219.27,-2290.62,14.00)
+					 wait(600)
+					 setCharCoordinates(PLAYER_PED,2226.75,-2282.28,14.00)
+					 wait(600)
+				end
+			if rup then
+					 setCharCoordinates(PLAYER_PED,2559.19,-1287.22,1044.13)
+					 wait(800)
+					 setCharCoordinates(PLAYER_PED,2558.40,-1291.00,1044.13)
+					 wait(13000)
+					 setCharCoordinates(PLAYER_PED,2564.48,-1293.02,1044.13)
+					 wait(800)
+				end
+	if defaultState and not nameTag then nameTagOn() end
+		if wasKeyPressed(KEY) then; 
+			if defaultState then
+				defaultState = false; 
+				nameTagOff(); 
+				while isKeyDown(KEY) do wait(100) end 
+			else
+				defaultState = true;
+				if whVisible ~= "bones" and not nameTag then nameTagOn() end
+				while isKeyDown(KEY) do wait(100) end 
+			end 
+		end
+		if defaultState and whVisible ~= "names" then
+			if not isPauseMenuActive() and not isKeyDown(VK_F8) then
+				for i = 0, sampGetMaxPlayerId() do
+				if sampIsPlayerConnected(i) then
+					local result, cped = sampGetCharHandleBySampPlayerId(i)
+					local color = sampGetPlayerColor(i)
+					local aa, rr, gg, bb = explode_argb(color)
+					local color = join_argb(255, rr, gg, bb)
+					if result then
+						if doesCharExist(cped) and isCharOnScreen(cped) then
+							local t = {3, 4, 5, 51, 52, 41, 42, 31, 32, 33, 21, 22, 23, 2}
+							for v = 1, #t do
+								pos1X, pos1Y, pos1Z = getBodyPartCoordinates(t[v], cped)
+								pos2X, pos2Y, pos2Z = getBodyPartCoordinates(t[v] + 1, cped)
+								pos1, pos2 = convert3DCoordsToScreen(pos1X, pos1Y, pos1Z)
+								pos3, pos4 = convert3DCoordsToScreen(pos2X, pos2Y, pos2Z)
+								renderDrawLine(pos1, pos2, pos3, pos4, 1, color)
+							end
+							for v = 4, 5 do
+								pos2X, pos2Y, pos2Z = getBodyPartCoordinates(v * 10 + 1, cped)
+								pos3, pos4 = convert3DCoordsToScreen(pos2X, pos2Y, pos2Z)
+								renderDrawLine(pos1, pos2, pos3, pos4, 1, color)
+							end
+							local t = {53, 43, 24, 34, 6}
+							for v = 1, #t do
+								posX, posY, posZ = getBodyPartCoordinates(t[v], cped)
+								pos1, pos2 = convert3DCoordsToScreen(posX, posY, posZ)
+							end
+						end
+					else
+				end
+			end
+				nameTagOff()
+				while isPauseMenuActive() or isKeyDown(VK_F8) do wait(0) end
+				nameTagOn()
+				end
+			end
+		end
+		if not scripts and isKeyDown(VK_1) and isKeyJustPressed(VK_2) and isCharInAnyCar(PLAYER_PED) and not sampIsChatInputActive() and not sampIsDialogActive() then 
+            sampAddChatMessage('[{00DD00}FlyCar{FFFFFF}] - {FFC000}Ieslegts', -1)
+            scripts = not scripts
+            ppc = {}
+        elseif scripts and isKeyJustPressed(VK_3) and isCharInAnyCar(PLAYER_PED) and not sampIsChatInputActive() and not sampIsDialogActive() then 
+            sampAddChatMessage('[{00DD00}FlyCar{FFFFFF}] - {FFC000}Izslegts', -1)
+            cars = 0
+            scripts = not scripts
+            ppc = {}
+        end
+        if scripts and isCharInAnyCar(PLAYER_PED) then
+            local veh = getCarCharIsUsing(PLAYER_PED)
+            if getDriverOfCar(veh) == -1 then pcall(sampForcePassengerSyncSeatId, ppc[1], ppc[2]) pcall(sampForceUnoccupiedSyncSeatId, ppc[1], ppc[2]) else pcall(sampForceVehicleSync, ppc[1]) end
+            local speed = getCarSpeed(veh)
+            setCarHeavy(veh, false)
+            setCarProofs(veh,true,true,true,true,true)
+            local var_1, var_2, var_3, var_4 = getPositionOfAnalogueSticks(0)
+            local var_1 = var_1 / -64.0
+            local var_2 = var_2 / 64.0
+            setCarRotationVelocity(veh, var_2, 0.0, var_1)
+            if isKeyDown(VK_W) then
+                if speed <= 200.0 then 
+                    cars = cars + 0.4
+                end
+            elseif isKeyDown(VK_S) then
+                if cars >= 0.0 then 
+                    cars = cars - 0.3
+                else 
+                    cars = 0.0
+                end
+            end
+            if isKeyDown(VK_S) and isKeyDown(VK_SPACE) then 
+                cars = 0
+                setCarRotationVelocity(veh, 0.0, 0.0, 0,0)
+                setCarRoll(veh, 0.0)
+            end
+            setCarForwardSpeed(veh,cars)
+            printStringNow('~R~S ~G~+ ~R~SPACE ~G~= ~R~FAST STOP')
+        elseif not isCharInAnyCar(PLAYER_PED) and scripts then 
+            sampAddChatMessage('[{00DD00}FlyCar{FFFFFF}] - {FFC000}Izslegts', -1)
+            scripts = not scripts
+            ppc = {}
+        end
 	if shook.v and not isCharInAnyCar(PLAYER_PED) then
 		if isButtonPressed(PLAYER_HANDLE, 16) then
 		setGameKeyState(16, 255)
@@ -444,7 +644,7 @@ function main()
 		if usd.v then
 		if not sampIsChatInputActive() and not sampIsDialogActive() and not sampIsScoreboardOpen() and not isSampfuncsConsoleActive() then
 		if isKeyJustPressed(VK_X) then
-			lua_thread.create(function()
+		lua_thread.create(function()
 			sampSendChat("/usedrugs 100")
 			sampSendChat("q")
 			wait(120000)
@@ -484,6 +684,25 @@ end
 		else
 		    setPlayerNeverGetsTired(playerHandle, false)
 			end
+			if isCharInAnyCar(PLAYER_PED) then
+            local car = getCarCharIsUsing(PLAYER_PED)
+            if car then
+                if tpp then
+                    setCarCollision(car,false)
+                    setCharCanBeKnockedOffBike(PLAYER_PED, true)
+                end
+            end
+		end
+	if kilstate.v then
+		if(did ~= -1) then
+		result, playerg = sampGetPlayerIdByCharHandle(playerPed)
+			wait(0)
+		pping = sampGetPlayerPing(playerg)
+			wait(pping+1000)
+		did = -1
+		end
+	wait(10)
+	end
 		if gangcheck.v then
 		sampTextdrawCreate(301, "0", 5.0, 300)
 		sampTextdrawCreate(302, "0", 5.0, 313)
@@ -704,19 +923,10 @@ function event.onServerMessage(color,text)
 	if ptimer.v then
 		if text:find("Jus iekravat 20000") then
 			lua_thread.create(function()
-			wait(131000)
+			wait(230000)
 			sampAddChatMessage("Jus varat izkraut kravu", -1)
 			end)
 		end
-	end
-end
-
-function hook.onSendPlayerSync(data)
-	if state1 then
-		local px, py, pz = getCharCoordinates(PLAYER_PED)
-		data.position.x = px+5
-		data.position.y = py+5
-		data.position.z = pz-15
 	end
 end
 
@@ -771,52 +981,17 @@ end
 
 function invis(arg)
 	if state1 then
-		printStringNow('Invisible: ~r~OFF', 1500)
+		printStringNow('Invisible ~r~OFF', 1500)
 		state1 = false
 	else
-		printStringNow('Invisible: ~g~ON', 1500)
+		printStringNow('Invisible ~g~ON', 1500)
 		state1 = true
-	end
-end
-
-function nameTagOn()
-	local pStSet = sampGetServerSettingsPtr()
-	NTdist = mem.getfloat(pStSet + 39)
-	NTwalls = mem.getint8(pStSet + 47) 
-	NTshow = mem.getint8(pStSet + 56) 
-	mem.setfloat(pStSet + 39, 1488.0)
-	mem.setint8(pStSet + 47, 0)
-	mem.setint8(pStSet + 56, 1)
-end
-
-function nameTagOff()
-	local pStSet = sampGetServerSettingsPtr()
-	mem.setfloat(pStSet + 39, NTdist)
-	mem.setint8(pStSet + 47, NTwalls)
-	mem.setint8(pStSet + 56, NTshow)
-end
-
-function onExitScript()
-	if NTdist then
-		nameTagOff()
-	end
-end
-
-function wh1()
-if whon == 0 then
-	printStringNow("WH ~g~ON", 1500)
-	whon = 1
-	nameTagOn()
-else
-	printStringNow("WH ~r~OFF", 1500)
-	whon = 0
-	nameTagOff()
 	end
 end
 
 function imgui.TextQuestion(text)
     imgui.SameLine()
-	imgui.TextDisabled('(?)')
+	imgui.TextDisabled('(*)')
 	if imgui.IsItemHovered() then
 		imgui.BeginTooltip()
 		imgui.PushTextWrapPos(450)
@@ -878,10 +1053,12 @@ end
 function aafish()
     if afish == 0 then
         printStringNow("AutoFish: ~g~ON", 1500)
+		show_main_window.v = false
 		afish = 1
 		sampSendChat("/fish")
 	else
 	    printStringNow("AutoFish: ~r~OFF", 1500)
+		show_main_window.v = false
 		afish = 0
     end	
 end
@@ -889,10 +1066,12 @@ end
 function bafish()
 	if bfish == 0 then
 		printStringNow("BoatFish: ~g~ON", 1500)
+		show_main_window.v = false
 		bfish = 1
 		sampSendChat("/fishboat")
 	else
 		printStringNow("BoatFish: ~r~OFF", 1500)
+		show_main_window.v = false
 		bfish = 0
 	end
 end
@@ -950,8 +1129,8 @@ function mafcr()
 end
 
 
-function event.onSendPlayerSync(data)	
-    weapon = getCurrentCharWeapon(playerPed)
+function event.onSendPlayerSync(data)
+  weapon = getCurrentCharWeapon(playerPed)
 	if(lastweapon ~= weapon) then
 	    if autorp.v then
 			if(weapon == 0) then
@@ -966,15 +1145,24 @@ function event.onSendPlayerSync(data)
 			lastweapon = weapon
 		end	
 	end	
-end		
+if state1 then
+		local px, py, pz = getCharCoordinates(PLAYER_PED)
+		data.position.x = px+5
+		data.position.y = py+5
+		data.position.z = pz-15
+	end
+    if tpp then
+        return false
+    end
+end
 		
 function event.onSendVehicleDamaged(vehicleId)
 	local rslt, ger = sampGetCarHandleBySampVehicleId(vehicleId)
 	if rslt then
+	if autcarrp.v then
 		curhp = getCarHealth(ger)
 		last = lasthp - 60
 		if(curhp < last) then
-			if autcarrp.v then
 				sampSendChat("/do Vaditajs un transportlidzeklis negadijuma cietis nedaudz, var turpinat celu.")
 			end
 		end
@@ -989,81 +1177,254 @@ function event.onSendEnterVehicle(vehicleId)
 	end	
 end
 
-function ev.onPlayerSync(id, data)
-	if antir.v then
-		local x, y, z = getCharCoordinates(PLAYER_PED)
-		if x - data.position.x > -1.5 and x - data.position.x < 1.5 then
-			if (data.moveSpeed.x >= 1.5 or data.moveSpeed.x <= -1.5) or (data.moveSpeed.y >= 1.5 or data.moveSpeed.y <= -1.5) or (data.moveSpeed.z >= 0.5 or data.moveSpeed.z <= -0.5) then
-				data.moveSpeed.x, data.moveSpeed.y, data.moveSpeed.z = 0, 0, 0
-			end
-		end
-	end
-	return {id, data}
-end
-
-function ev.onVehicleSync(id, vehid, data)
-	if antir.v then
-		local x, y, z = getCharCoordinates(PLAYER_PED)
-		if x - data.position.x > -1.5 and x - data.position.x < 1.5 then
-			if (data.moveSpeed.x >= 1.5 or data.moveSpeed.x <= -1.5) or (data.moveSpeed.y >= 1.5 or data.moveSpeed.y <= -1.5) or (data.moveSpeed.z >= 0.5 or data.moveSpeed.z <= -0.5) then
-				data.moveSpeed.x, data.moveSpeed.y, data.moveSpeed.z = 0, 0, 0
-				data.position.x = data.position.x - 5
-			end
-		end
-	end
-	return {id, vehid, data}
-end
-
-function CtoggleCaptFlooder()
-	if not CFlooderWorking then
-		CFlooderWorking = true
-		lua_thread.create(function()
-			while CFlooderWorking do
-				printStringNow("CaptureFlooderV2: ~b~working...", 0+1000)		   
-				sampSendChat("/capture")
-				wait(72)
-			end
-		end)
-	else 
-		CFlooderWorking = false
-		printStringNow("CaptureFlooderV2: ~r~OFF", 1500)
-	end
-end
-
 function suicide()
     setCharHealth(PLAYER_PED, 0)
 end
 
-function update()
-  local fpath = os.getenv('TEMP') .. '\\testoviy_version.json'
-  downloadUrlToFile('https://github.com/BugsyKrewazz/project/blob/e8456e89fdaa0a35c41f61317289bbe9774936c5/autoupdate', fpath, function(id, status, p1, p2)
-    if status == dlstatus.STATUS_ENDDOWNLOADDATA then
-    local f = io.open(fpath, 'r')
-    if f then
-      local info = decodeJson(f:read('*a'))
-      updatelink = info.updateurl
-      if info and info.latest then
-        version = tonumber(info.latest) 
-        if version > tonumber(thisScript().version) then
-          lua_thread.create(goupdate)
-        else 
-          update = false 
-          sampAddChatMessage(('[Testing]: Jums jau ir jaunaka versija! Atjauninasana atcelta'), color)
-        end
-      end
+function ev.onSendGiveDamage(playerId, damage, weapon, bodypart)
+if kilstate.v then
+lua_thread.create(function()
+health1 = sampGetPlayerHealth(playerId)
+inStream, pHandle = sampGetCharHandleBySampPlayerId(playerId)
+wait(0)
+ping = sampGetPlayerPing(playerId)
+time = ping+150
+wait(time)
+health = sampGetPlayerHealth(playerId)
+if did~=playerId then
+if isCharDead(pHandle) then
+did=playerId
+kills = kills + 1
+callStyledString()
+				end
+			else
+		end
+	end)
+end
+if maxshot.v then
+	if data1 == 25 and maxshot.v then
+		return {id, 48, data1, data2, data3}
+		end
+	end
+end
+	
+function tp(id)
+    local posX, posY, posZ = getCharCoordinates(PLAYER_PED)
+    if id == 1 then
+        res, mX, mY, mZ = getTargetBlipCoordinates()
+    elseif id == 0 then
+        res, mX, mY, mZ = SearchMarker(false)
     end
-  end
-end)
+    if res then
+        while tpp do wait(10)
+            if id == 1 then
+                res, mX, mY, mZ = getTargetBlipCoordinates()
+            elseif id == 0 then
+                res, mX, mY, mZ = SearchMarker(false)
+            end
+            if res then
+                local car = getCarCharIsUsing(PLAYER_PED)
+                local _, id = sampGetVehicleIdByCarHandle(car)
+                if _ then
+                    local posX, posY, posZ = getCharCoordinates(PLAYER_PED)
+                    local var_dist = getDistanceBetweenCoords3d(0, 0, posZ, 0, 0, mZ)
+                    if mZ > posZ then
+                        if var_dist <= 3 then
+                            setCharCoordinates(PLAYER_PED, posX, posY, mZ)
+                        elseif var_dist > 3 then
+                            setCharCoordinates(PLAYER_PED, posX, posY, posZ + 2)
+                        end
+                    elseif mZ < posZ then
+                        if var_dist <= 3 then
+                            setCharCoordinates(PLAYER_PED, posX, posY, mZ)
+                        elseif var_dist > 3 then
+                            setCharCoordinates(PLAYER_PED, posX, posY, posZ - 2)
+                        end
+                    end
+                    var_float_x = mX - posX
+                    var_float_y = mY - posY
+                    local angle = getHeadingFromVector2d(var_float_x,var_float_y)
+                    setCarHeading(car, angle)
+                    setCarForwardSpeed(car, speed)
+                    local dist = getDistanceBetweenCoords2d(posX, posY, mX, mY)
+                    printStringNow('~G~Dist: ~R~'..math.ceil(dist), 100)
+                    setCarCollision(car,false)
+                    setCharCanBeKnockedOffBike(PLAYER_PED, true)
+                    if dist <= 3 then
+                        setCharCoordinates(PLAYER_PED, mX, mY, posZ)
+                        tpp = false
+                        sampAddChatMessage('[InCarTeleport]{FFC000} - Tu esi sasniedzis galamerki!', -1)
+                    end
+                else
+                    sampAddChatMessage('[InCarTeleport]{FFC000} - Lai stradatu teleports iekap ieksh auto!', -1)
+                    tpp = false
+                end
+            else
+                sampAddChatMessage('[InCarTeleport]{FFC000} Wrong! Nenemiet nost checkpoint kamer Teleportejas', -1)
+                tpp = false
+            end
+        end
+    else
+        sampAddChatMessage('[InCarTeleport]{FFC000} - Vispirms atliec mape checkpintu!', -1)
+        tpp = false
+    end
+    local car = getCarCharIsUsing(PLAYER_PED)
+    if car and isCharInAnyCar(PLAYER_PED) then
+        setCarCollision(car, true)
+        setCarForwardSpeed(car, 0)
+    end
 end
 
-function goupdate()
-sampAddChatMessage(('[Testing]: Atrasts atjauninajums. Automātiskā ielāde. Notiek atjaunināšana...'), color)
-sampAddChatMessage(('[Testing]: Pasreizeja versija: '..thisScript().version..". Jauna: "..version), color)
-wait(300)
-downloadUrlToFile(updatelink, thisScript().path, function(id3, status1, p13, p23)
-  if status1 == dlstatus.STATUS_ENDDOWNLOADDATA then
-  sampAddChatMessage(('[Testing]: Atjauninasana pabeigta!'), color)
-  thisScript():reload()
+function getMoveSpeed(heading)
+    moveSpeed = {x = math.sin(-math.rad(heading)) * 1.250, y = math.cos(-math.rad(heading)) * 1.250, z = -0.0000001} 
+    return moveSpeed
 end
-end)
+
+function sampev.onSendVehicleSync(data)
+    if tpp then
+        local _, veh = sampGetCarHandleBySampVehicleId(data.vehicleId)
+        if _ then
+            local heading = getCarHeading(veh)
+            data.moveSpeed = getMoveSpeed(heading)
+        end
+    end
+	    if scripts then 
+        ppc = {data.vehicleId}
+        local _, veh = sampGetCarHandleBySampVehicleId(data.vehicleId)
+        local heading = getCarHeading(veh)
+        data.moveSpeed = getMoveSpeed(heading, 1.250)
+        return data  
+    end
+end
+	
+function sampev.onSendPassengerSync(data)
+    if tpp then
+        return false
+    end
+	    if scripts then 
+        ppc = {data.vehicleId, data.seatId}
+    end
+end
+
+function sampev.onSendUnoccupiedSync(data)
+    if tpp then
+        return false
+    end
+	    if scripts then 
+        local _, veh = sampGetCarHandleBySampVehicleId(data.vehicleId)
+        local heading = getCarHeading(veh)
+        data.moveSpeed = getMoveSpeed(heading, 0.200)
+        return data    
+    end
+end
+
+function sampev.onSetPlayerPos()
+    if tpp then
+        return false
+    end
+end
+
+function sampev.onRemovePlayerFromVehicle()
+    if tpp then
+        return false
+    end
+end
+
+function sampev.onSetVehiclePosition(position)
+    if tpp then
+        return false
+	end
+end
+
+function ev.onSendSpawn()
+kills = 0
+end
+
+function callStyledString()
+if kilstate.v then
+	if(kills == 1) then printStyledString('~r~> ~y~FIRST BLOOD ~r~<', 3000, 7) end
+	if(kills == 2) then printStyledString('~r~> ~y~DOUBLE KILL ~r~<', 3000, 7) end
+	if(kills == 3) then printStyledString('~r~> ~y~TRIPPLE KILL ~r~<', 3000, 7) end
+	if(kills == 4) then printStyledString('~r~> ~y~QUADRUPLE KILL ~r~<', 3000, 7) end
+	if(kills == 5) then printStyledString('~r~> ~y~MULTI KILL ~r~<', 3000, 7) end
+	if(kills == 6) then printStyledString('~r~> ~y~RAMPAGE ~r~<', 3000, 7) end
+	if(kills == 7) then printStyledString('~r~> ~y~KILLING SPREE ~r~<', 3000, 7) end
+	if(kills == 8) then printStyledString('~r~> ~y~IMPRESSIVE ~r~<', 3000, 7) end
+	if(kills == 9) then printStyledString('~r~> ~y~DOMINATING ~r~<', 3000, 7) end
+	if(kills == 10) then printStyledString('~r~> ~y~HUMILIATING ~r~<', 3000, 7) end
+	if(kills == 11) then printStyledString('~r~> ~y~UNSTOPPABLE ~r~<', 3000, 7) end
+	if(kills == 12) then printStyledString('~r~> ~y~COMBO WHORE ~r~<', 3000, 7) end
+	if(kills == 13) then printStyledString('~r~> ~y~MEGA KILL ~r~<', 3000, 7) end
+	if(kills == 14) then printStyledString('~r~> ~y~RIDICULOUS KILL ~r~<', 3000, 7) end
+	if(kills == 15) then printStyledString('~r~> ~y~ULTRA KILL ~r~<', 3000, 7) end
+	if(kills == 16) then printStyledString('~r~> ~y~EAGLE EYE ~r~<', 3000, 7) end
+	if(kills == 17) then printStyledString('~r~> ~y~OWNAGE ~r~<', 3000, 7) end
+	if(kills == 18) then printStyledString('~r~> ~y~LUDICROUS KILL ~r~<', 3000, 7) end
+	if(kills == 19) then printStyledString('~r~> ~y~HEAD HUNTER ~r~<', 3000, 7) end
+	if(kills == 20) then printStyledString('~r~> ~y~WICKED SICK ~r~<', 3000, 7) end
+	if(kills == 21) then printStyledString('~r~> ~y~MONSTER KILL ~r~<', 3000, 7) end
+	if(kills == 22) then printStyledString('~r~> ~y~HATTRICK ~r~<', 3000, 7) end
+	if(kills == 23) then printStyledString('~r~> ~y~HOLY SHIT ~r~<', 3000, 7) end
+	if(kills == 24) then printStyledString('~r~> ~y~GODLIKE ~r~<', 3000, 7) kills = 0 end
+	end
+end
+
+function getBodyPartCoordinates(id, handle)
+  local pedptr = getCharPointer(handle)
+  local vec = ffi.new("float[3]")
+  getBonePosition(ffi.cast("void*", pedptr), vec, id, true)
+  return vec[0], vec[1], vec[2]
+end
+
+function nameTagOn()
+	local pStSet = sampGetServerSettingsPtr();
+	NTdist = mem.getfloat(pStSet + 39)
+	NTwalls = mem.getint8(pStSet + 47)
+	NTshow = mem.getint8(pStSet + 56)
+	mem.setfloat(pStSet + 39, 1488.0)
+	mem.setint8(pStSet + 47, 0)
+	mem.setint8(pStSet + 56, 1)
+	nameTag = true
+end
+
+function nameTagOff()
+	local pStSet = sampGetServerSettingsPtr();
+	mem.setfloat(pStSet + 39, NTdist)
+	mem.setint8(pStSet + 47, NTwalls)
+	mem.setint8(pStSet + 56, NTshow)
+	nameTag = false
+end
+
+function join_argb(a, r, g, b)
+  local argb = b  -- b
+  argb = bit.bor(argb, bit.lshift(g, 8))  -- g
+  argb = bit.bor(argb, bit.lshift(r, 16)) -- r
+  argb = bit.bor(argb, bit.lshift(a, 24)) -- a
+  return argb
+end
+
+function explode_argb(argb)
+  local a = bit.band(bit.rshift(argb, 24), 0xFF)
+  local r = bit.band(bit.rshift(argb, 16), 0xFF)
+  local g = bit.band(bit.rshift(argb, 8), 0xFF)
+  local b = bit.band(argb, 0xFF)
+  return a, r, g, b
+end
+
+function cmd_seklas()
+    sekl = not sekl
+    if sekl then
+        printStringNow("Seklinieki ~g~ON", 1500)
+	else
+        printStringNow('Seklinieki ~r~OFF', 1500)
+    end
+end
+
+function cmd_rupnic()
+	rup = not rup
+	if rup then
+		printStringNow("AutoRupnica ~g~ON", 1500)
+	else
+		printStringNow("AutoRupnica ~r~OFF", 1500)
+	end
 end
